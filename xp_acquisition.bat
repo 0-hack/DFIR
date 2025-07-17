@@ -1,5 +1,5 @@
 @echo off
-setlocal ENABLEEXTENSIONS
+setlocal ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 :: Timestamp for output folder
 set hour=%TIME:~0,2%
@@ -20,6 +20,7 @@ mkdir "%outdir%\EventLogs"
 mkdir "%outdir%\Prefetch"
 mkdir "%hashdir%"
 mkdir "%copiedir%"
+mkdir "%outdir%\ADS_Dumps"
 
 echo [*] Collecting system info...
 systeminfo > "%outdir%\systeminfo.txt"
@@ -107,11 +108,26 @@ for /R "C:\Windows\System32" %%F in (*.dll) do (
     hashdeep.exe -c md5,sha1,sha256 "%%F" >> "%hashdir%\system32_dll_hashes.txt" 2>> "%hashdir%\temp_system32_errors.txt"
 )
 
-echo [*] Scanning for Alternate Data Streams (ADS)...
-streams.exe -s "%ProgramFiles%" > "%outdir%\ads_programfiles.txt" 2>nul
-streams.exe -s "C:\Documents and Settings" > "%outdir%\ads_user_profiles.txt" 2>nul
-streams.exe -s "C:\WINDOWS\Temp" > "%outdir%\ads_temp.txt" 2>nul
-streams.exe -s "C:\Windows\System32" > "%outdir%\ads_system32.txt" 2>nul
+echo [*] Scanning and dumping Alternate Data Streams (ADS)...
+set "adsdumpdir=%outdir%\ADS_Dumps"
+mkdir "%adsdumpdir%"
+
+for %%D in ("%ProgramFiles%" "C:\Documents and Settings" "C:\WINDOWS\Temp" "C:\Windows\System32") do (
+    echo [*] Scanning %%~D for ADS...
+    streams.exe -s "%%~D" > "%adsdumpdir%\ads_list_%%~nxD.txt" 2>nul
+
+    for /f "tokens=1,* delims=:" %%A in ('streams.exe -s -nobanner "%%~D" ^| findstr ":"') do (
+        set "file=%%A"
+        set "stream=%%B"
+        setlocal enabledelayedexpansion
+        set "cleanstream=!stream:~1!"
+        set "filename=!file:\=_-!_!cleanstream:~0,50!.bin"
+        set "outfile=%adsdumpdir%\!filename!"
+        echo [*] Dumping ADS !cleanstream! from !file! to !outfile!
+        more < "!file!!stream!" > "!outfile!" 2>nul
+        endlocal
+    )
+)
 
 echo [*] Checking for permission denied errors...
 findstr /I "denied" "%hashdir%\temp_user_errors.txt" > "%hashdir%\user_profiles_failed.txt"
