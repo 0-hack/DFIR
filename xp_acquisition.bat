@@ -102,6 +102,11 @@ hashdeep.exe -r -c md5,sha1,sha256 "C:\Documents and Settings" > "%hashdir%\user
 echo [*] Computing MD5, SHA1, SHA256 hashes in C:\WINDOWS\Temp...
 hashdeep.exe -r -c md5,sha1,sha256 "C:\WINDOWS\Temp" > "%hashdir%\windows_temp_hashes.txt" 2> "%hashdir%\temp_windows_temp_errors.txt"
 
+echo [*] Computing MD5, SHA1, SHA256 hashes for .DLL files in C:\Windows\System32...
+for /R "C:\Windows\System32" %%F in (*.dll) do (
+    hashdeep.exe -c md5,sha1,sha256 "%%F" >> "%hashdir%\system32_dll_hashes.txt" 2>> "%hashdir%\temp_system32_errors.txt"
+)
+
 echo [*] Checking for permission denied errors...
 findstr /I "denied" "%hashdir%\temp_user_errors.txt" > "%hashdir%\user_profiles_failed.txt"
 del "%hashdir%\temp_user_errors.txt"
@@ -112,9 +117,11 @@ del "%hashdir%\temp_windows_temp_errors.txt"
 findstr /I "denied" "%hashdir%\temp_programfiles_errors.txt" > "%hashdir%\programfiles_failed.txt"
 del "%hashdir%\temp_programfiles_errors.txt"
 
+findstr /I "denied" "%hashdir%\temp_system32_errors.txt" > "%hashdir%\system32_failed.txt"
+del "%hashdir%\temp_system32_errors.txt"
+
 if exist "%hashdir%\user_profiles_failed.txt" (
     echo [!] Detected access-denied files in user profiles. Attempting recovery...
-
     for /f "usebackq delims=" %%F in ("%hashdir%\user_profiles_failed.txt") do (
         set "line=%%F"
         call :extractpath "%%F"
@@ -123,7 +130,6 @@ if exist "%hashdir%\user_profiles_failed.txt" (
 
 if exist "%hashdir%\windows_temp_failed.txt" (
     echo [!] Detected access-denied files in Windows\Temp. Attempting recovery...
-
     for /f "usebackq delims=" %%F in ("%hashdir%\windows_temp_failed.txt") do (
         set "line=%%F"
         call :extractpath "%%F"
@@ -132,8 +138,15 @@ if exist "%hashdir%\windows_temp_failed.txt" (
 
 if exist "%hashdir%\programfiles_failed.txt" (
     echo [!] Detected access-denied files in Program Files. Attempting recovery...
-
     for /f "usebackq delims=" %%F in ("%hashdir%\programfiles_failed.txt") do (
+        set "line=%%F"
+        call :extractpath "%%F"
+    )
+)
+
+if exist "%hashdir%\system32_failed.txt" (
+    echo [!] Detected access-denied .DLL files in System32. Attempting recovery...
+    for /f "usebackq delims=" %%F in ("%hashdir%\system32_failed.txt") do (
         set "line=%%F"
         call :extractpath "%%F"
     )
