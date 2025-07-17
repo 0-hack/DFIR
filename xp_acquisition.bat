@@ -55,6 +55,12 @@ net localgroup administrators > "%outdir%\admin_group.txt"
 echo [*] Copying HOSTS file...
 copy "%WINDIR%\system32\drivers\etc\hosts" "%outdir%\hosts.txt" >nul 2>&1
 
+echo [*] Collecting Windows Firewall configuration...
+netsh firewall show config > "%outdir%\firewall_config.txt"
+netsh firewall show portopening > "%outdir%\firewall_ports.txt"
+netsh firewall show allowedprogram > "%outdir%\firewall_programs.txt"
+netsh firewall show service > "%outdir%\firewall_services.txt"
+
 echo [*] Exporting full registry hives (.reg)...
 reg export HKCR "%outdir%\RegistryExports\HKCR_full.reg"
 reg export HKCU "%outdir%\RegistryExports\HKCU_full.reg"
@@ -88,23 +94,52 @@ echo [*] Listing installed drivers...
 driverquery /v > "%outdir%\drivers.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes in Program Files...
-hashdeep.exe -r -c md5,sha1,sha256 "%ProgramFiles%" > "%hashdir%\programfiles_hashes.txt" 2>nul
+hashdeep.exe -r -c md5,sha1,sha256 "%ProgramFiles%" > "%hashdir%\programfiles_hashes.txt" 2> "%hashdir%\temp_programfiles_errors.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes in Documents and Settings...
 hashdeep.exe -r -c md5,sha1,sha256 "C:\Documents and Settings" > "%hashdir%\user_profiles_hashes.txt" 2> "%hashdir%\temp_user_errors.txt"
+
+echo [*] Computing MD5, SHA1, SHA256 hashes in C:\WINDOWS\Temp...
+hashdeep.exe -r -c md5,sha1,sha256 "C:\WINDOWS\Temp" > "%hashdir%\windows_temp_hashes.txt" 2> "%hashdir%\temp_windows_temp_errors.txt"
 
 echo [*] Checking for permission denied errors...
 findstr /I "denied" "%hashdir%\temp_user_errors.txt" > "%hashdir%\user_profiles_failed.txt"
 del "%hashdir%\temp_user_errors.txt"
 
+findstr /I "denied" "%hashdir%\temp_windows_temp_errors.txt" > "%hashdir%\windows_temp_failed.txt"
+del "%hashdir%\temp_windows_temp_errors.txt"
+
+findstr /I "denied" "%hashdir%\temp_programfiles_errors.txt" > "%hashdir%\programfiles_failed.txt"
+del "%hashdir%\temp_programfiles_errors.txt"
+
 if exist "%hashdir%\user_profiles_failed.txt" (
-    echo [!] Detected access-denied files. Attempting recovery...
+    echo [!] Detected access-denied files in user profiles. Attempting recovery...
 
     for /f "usebackq delims=" %%F in ("%hashdir%\user_profiles_failed.txt") do (
         set "line=%%F"
         call :extractpath "%%F"
     )
+)
 
+if exist "%hashdir%\windows_temp_failed.txt" (
+    echo [!] Detected access-denied files in Windows\Temp. Attempting recovery...
+
+    for /f "usebackq delims=" %%F in ("%hashdir%\windows_temp_failed.txt") do (
+        set "line=%%F"
+        call :extractpath "%%F"
+    )
+)
+
+if exist "%hashdir%\programfiles_failed.txt" (
+    echo [!] Detected access-denied files in Program Files. Attempting recovery...
+
+    for /f "usebackq delims=" %%F in ("%hashdir%\programfiles_failed.txt") do (
+        set "line=%%F"
+        call :extractpath "%%F"
+    )
+)
+
+if exist "%copiedir%" (
     echo [*] Hashing recovered files (MD5, SHA1, SHA256)...
     hashdeep.exe -r -c md5,sha1,sha256 "%copiedir%" > "%hashdir%\recovered_hashes.txt" 2>nul
 )
