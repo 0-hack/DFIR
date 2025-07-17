@@ -11,6 +11,7 @@ set timestamp=%DATE:~10,4%-%DATE:~4,2%-%DATE:~7,2%_%hour%%minute%
 set basedir=%~dp0
 set outdir=%basedir%XP_Forensics_%timestamp%
 set hashdir=%outdir%\Hashes
+set metadir=%outdir%\Metadata
 set copiedir=%hashdir%\CopiedDeniedFiles
 
 :: Create output folders
@@ -19,6 +20,7 @@ mkdir "%outdir%\RegistryExports"
 mkdir "%outdir%\EventLogs"
 mkdir "%outdir%\Prefetch"
 mkdir "%hashdir%"
+mkdir "%metadir%"
 mkdir "%copiedir%"
 
 echo [*] Collecting system info...
@@ -95,17 +97,21 @@ driverquery /v > "%outdir%\drivers.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes in Program Files...
 hashdeep.exe -r -c md5,sha1,sha256 "%ProgramFiles%" > "%hashdir%\programfiles_hashes.txt" 2> "%hashdir%\temp_programfiles_errors.txt"
+dir /a /s "%ProgramFiles%" > "%metadir%\programfiles_metadata.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes in Documents and Settings...
 hashdeep.exe -r -c md5,sha1,sha256 "C:\Documents and Settings" > "%hashdir%\user_profiles_hashes.txt" 2> "%hashdir%\temp_user_errors.txt"
+dir /a /s /t:c /t:w /t:a "C:\Documents and Settings" > "%metadir%\user_profiles_metadata.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes in C:\WINDOWS\Temp...
 hashdeep.exe -r -c md5,sha1,sha256 "C:\WINDOWS\Temp" > "%hashdir%\windows_temp_hashes.txt" 2> "%hashdir%\temp_windows_temp_errors.txt"
+dir /a /s /t:c /t:w /t:a "C:\WINDOWS\Temp" > "%metadir%\windows_temp_metadata.txt"
 
 echo [*] Computing MD5, SHA1, SHA256 hashes for .DLL files in C:\Windows\System32...
-for /R "C:\Windows\System32" %%F in (*.dll) do (
-    hashdeep.exe -c md5,sha1,sha256 "%%F" >> "%hashdir%\system32_dll_hashes.txt" 2>> "%hashdir%\temp_system32_errors.txt"
-)
+(for /R "C:\Windows\System32" %%F in (*.dll) do (
+    hashdeep.exe -c md5,sha1,sha256 "%%F" 2>> "%hashdir%\temp_system32_errors.txt"
+    echo %%~tF %%~zF %%F >> "%metadir%\system32_dll_metadata.txt"
+)) > "%hashdir%\system32_dll_hashes.txt"
 
 echo [*] Checking for permission denied errors...
 findstr /I "denied" "%hashdir%\temp_user_errors.txt" > "%hashdir%\user_profiles_failed.txt"
@@ -155,6 +161,7 @@ if exist "%hashdir%\system32_failed.txt" (
 if exist "%copiedir%" (
     echo [*] Hashing recovered files (MD5, SHA1, SHA256)...
     hashdeep.exe -r -c md5,sha1,sha256 "%copiedir%" > "%hashdir%\recovered_hashes.txt" 2>nul
+    dir /a /s /t:c /t:w /t:a "%copiedir%" > "%metadir%\recovered_metadata.txt"
 )
 
 echo.
@@ -179,4 +186,3 @@ set "filename=%~nx1"
 copy /Y "%srcfile%" "%copiedir%\%filename%" >nul 2>&1
 endlocal
 goto :eof
-
